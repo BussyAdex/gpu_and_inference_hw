@@ -4,6 +4,7 @@
 
 - `hw1/`: implement and benchmark operations with different arithmetic intensity.
 - `hw2/`: profile and optimize an autoregressive generation loop.
+- `hw3/` *(optional, coming soon)*: build the memory and scheduling core of a mini LLM inference engine.
 
 ## Setup
 
