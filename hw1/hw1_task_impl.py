@@ -119,17 +119,55 @@ def compute_elementwise_metrics(num_elements, num_ops, bytes_per_element, ms, va
 # Part 3: Short Writeup
 # ============================================================================
 # Answer these after you generate `results/roofline.png` and inspect the points.
-#
+
 # Q1. Look at the compiled element-wise operations from `1 ops` through `64 ops`.
 # Why does performance rise as arithmetic intensity increases even though the
 # measured runtime changes only a little?
-#
+
+# Answer
+# The relationship comes directly from the performance equation: FLOP/s = total FLOPs / runtime.
+# This is because the amount of data moved through memory remains nearly unchanged, the kernel remains memory-bound.
+# The GPU spends most of its time waiting on memory transfers rather than computation.
+# As more FLOPs are performed per byte transferred, the numerator in the FLOP/s equation increases
+# while execution time remains nearly constant.
+# The roofline graph clearly shows these compiled kernels moving upward along the sloped memory-bandwidth ceiling until they approach the ridge point.
+
 # Q2. In one sample run, `matmul 1024x1024` achieved lower FLOP/s than the
 # `128 ops` compiled element-wise operation. Give one or two reasons why that can
 # happen on a large GPU like an H100.
-#
+
+# Answer
+# Although matrix multiplication is highly optimized, the 1024×1024 FP32 GEMM workload is relatively small for an H100 GPU.
+# The key issue is that the total computational workload of a 1024×1024 matrix multiplication is only around 2 GFLOPs,
+# which is tiny for an H100 capable of roughly 67 TFLOP/s FP32 compute.
+# Several overheads become significant at this scale: Kernel launch overhead, cuBLAS dispatch overhead, Limited occupancy and Tile efficiency.
+# Even though matmul has much higher arithmetic intensity, small problem sizes prevent the GPU from reaching peak utilization.
+
+
 # Q3. Between `64 ops` and `128 ops`, runtime increases more noticeably than it
 # did for smaller operations. What does that suggest about what resource is
 # becoming the bottleneck?
-#
+
+# Answer
+# The runtime increase between 64 and 128 compiled operations indicates a transition from a memory-bound regime to a compute-bound regime
+# At lower arithmetic intensities, computation is effectively free because the GPU is already waiting on memory transfers.
+# Increasing FLOPs does not meaningfully increase runtime.
+# However, around 64–128 operations, the workload crosses the roofline ridge point where the compute ceiling becomes the limiting factor.
+# The roofline model expresses the memory-bound region as:
+# Performance=Arithmetic Intensity×Memory Bandwidth
+# Once the workload exceeds the ridge point, performance can no longer scale linearly with arithmetic intensity because compute throughput saturates.
+
 # Q4. Why do the eager `ops-K` points look so different from the compiled ones?
+
+# Answer
+# The eager execution kernels behave differently because they lack kernel fusion and therefore suffer from additional memory traffic and launch overhead.
+# The eager implementation executes each arithmetic operation independently:
+# Every + and * becomes a separate kernel launch
+# Intermediate tensors are written to and read from global memory
+# Memory traffic increases linearly with the number of operations
+#
+# This leads to two major inefficiencies:
+# 1. Kernel Launch Overhead: Each operation incurs its own GPU launch latency.
+# As the number of operations increases, Runtime scales almost linearly with the number of kernels launched.
+# 2. Increased Global Memory Traffic: Eager execution materializes intermediate tensors after every operation.
+# This reduces arithmetic intensity because bytes moved increase alongside FLOPs. The eager kernels therefore remain stuck at low arithmetic intensity.
